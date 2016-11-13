@@ -39,7 +39,7 @@
 	<variableList>
 		<variable>
 			<name>SW_ROOT</name>
-			<value>file:/C:/Program%20Files%20(x86)/Texas%20Instruments/StellarisWare</value>
+			<value>file:/C:/StellarisWare</value>
 		</variable>
 	</variableList>
 </projectDescription>
