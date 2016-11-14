@@ -13,6 +13,7 @@
 #include "driverlib/timer.h"				// Timer Driver Prototypes
 #include "driverlib/interrupt.h"			// Interrupt Driver Prototypes
 #include "driverlib/gpio.h"					// GPIO Driver Prototypes
+#include "driverlib/adc.h"					// ADC Driver Prototypes
 #include "drivers/rit128x96x4.h"			// Screen (OLED) Display Driver
 #include "utils/ustdlib.h"					// Standard Library Prototypes
 #include "frame_graphics.h"					// Easy Display Functions
@@ -21,6 +22,7 @@
 
 /* Function Prototypes */
 void TimerISR(void);
+void ADC_ISR(void);
 void checkButtons(void);
 void incrementTime(void);
 static void calculateTime(unsigned long);
@@ -30,6 +32,8 @@ void printTime();
 /* Definitions */
 #define BUTTON_CLOCK 200					// Button Scan Rate (Hz)
 #define PI 3.14159265358979323846			// PI Constant
+#define ADC_BUFFER_SIZE 2048 // must be a power of 2
+#define ADC_BUFFER_WRAP(i) ((i) & (ADC_BUFFER_SIZE - 1)) // index wrapping macro
 
 /* Global Variables */
 unsigned long g_ulSystemClock;				// System Clock Frequency (Hz)
@@ -41,6 +45,25 @@ static int seconds = 0;
 static int minutes = 0;
 static int hours = 0;
 static char timeString [50];
+
+/* ADC Variables */
+volatile int g_iADCBufferIndex = ADC_BUFFER_SIZE - 1; // latest sample index
+volatile short g_psADCBuffer[ADC_BUFFER_SIZE]; // circular buffer
+volatile unsigned long g_ulADCErrors = 0; // number of missed ADC deadlines
+
+/* ADC Interrupt */
+void ADC_ISR(void)
+{
+	ADC0_ISC_R = ADC_ISC_IN0; // clear ADC sequence0 interrupt flag in the ADCISC register
+
+	if (ADC0_OSTAT_R & ADC_OSTAT_OV0) { // check for ADC FIFO overflow
+		g_ulADCErrors++; // count errors - step 1 of the signoff
+		ADC0_OSTAT_R = ADC_OSTAT_OV0; // clear overflow condition
+	}
+	int buffer_index = ADC_BUFFER_WRAP(g_iADCBufferIndex + 1);
+	g_psADCBuffer[buffer_index] = ADC_SSFIFO0_R; // read sample from the ADC sequence0 FIFO
+	g_iADCBufferIndex = buffer_index;
+}
 
 /* Interrupt Function */
 void TimerISR(void)
@@ -66,6 +89,9 @@ void incrementTime()
 	}
 }
 
+/*
+ * Calculate hours, minutes, seconds from time
+ */
 static void calculateTime(unsigned long currentTime)
 {
 	centiSeconds = currentTime % 100; // 10 Miliseconds
@@ -167,6 +193,11 @@ void printTime()
 	DrawString(0, 0, timeString, 15, false);
 }
 
+void printADC()
+{
+
+}
+
 void screenClean()
 {
 	FillFrame(0);
@@ -178,9 +209,18 @@ void screenDraw()
 	RIT128x96x4ImageDraw(g_pucFrame, 0, 0, FRAME_SIZE_X, FRAME_SIZE_Y);
 }
 
-void initializeADC()
+void initializeADC(void)
 {
-
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0); // enable the ADC
+	SysCtlADCSpeedSet(SYSCTL_ADCSPEED_500KSPS); // specify 500ksps
+	ADCSequenceDisable(ADC0_BASE, 0); // choose ADC sequence 0; disable before configuring
+	ADCSequenceConfigure(ADC0_BASE, 0, ADC_TRIGGER_ALWAYS, 0); // specify the "Always" trigger, highest priority
+	ADCSequenceStepConfigure(ADC0_BASE, 0, 0, ADC_CTL_CH0 | ADC_CTL_IE | ADC_CTL_END); // in the 0th step, sample channel 0
+	 // enable interrupt, and make it the end of sequence
+	ADCIntEnable(ADC0_BASE, 0); // enable ADC interrupt from sequence 0
+	ADCSequenceEnable(ADC0_BASE, 0); // enable the sequence. it is now sampling
+	IntPrioritySet(INT_ADC0, 32); // set ADC interrupt priority in the interrupt controller - lower than main ISR
+	IntEnable(INT_ADC0); // enable ADC interrupt
 }
 
 void initializeScreen()
