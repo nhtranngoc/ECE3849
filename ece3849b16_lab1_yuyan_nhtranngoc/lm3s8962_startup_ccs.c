@@ -29,9 +29,11 @@
 // Forward declaration of the default fault handlers.
 //
 //*****************************************************************************
-void TimerISR(void);
-void ResetISR(void);
+void Timer0AISR(void);
+void Timer1AISR(void);
+void Timer2AISR(void);
 void ADC_ISR(void);
+void ResetISR(void);
 static void NmiSR(void);
 static void FaultISR(void);
 static void IntDefaultHandler(void);
@@ -99,16 +101,16 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // PWM Generator 1
     IntDefaultHandler,                      // PWM Generator 2
     IntDefaultHandler,                      // Quadrature Encoder 0
-    ADC_ISR,                      			// ADC Sequence 0
+	ADC_ISR,                      			// ADC Sequence 0
     IntDefaultHandler,                      // ADC Sequence 1
     IntDefaultHandler,                      // ADC Sequence 2
     IntDefaultHandler,                      // ADC Sequence 3
     IntDefaultHandler,                      // Watchdog timer
-	TimerISR,								// Timer 0 subtimer A
+	Timer0AISR,								// Timer 0 subtimer A
     IntDefaultHandler,                      // Timer 0 subtimer B
-    IntDefaultHandler,                      // Timer 1 subtimer A
+	Timer1AISR,                      		// Timer 1 subtimer A
     IntDefaultHandler,                      // Timer 1 subtimer B
-    IntDefaultHandler,                      // Timer 2 subtimer A
+	Timer2AISR,                      		// Timer 2 subtimer A
     IntDefaultHandler,                      // Timer 2 subtimer B
     IntDefaultHandler,                      // Analog Comparator 0
     IntDefaultHandler,                      // Analog Comparator 1
