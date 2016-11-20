@@ -3,143 +3,114 @@
  * Submitted: 11/XX/2016
  * * * * * * * * * *  * */
 
-/* Libraries */
-#include "inc/hw_types.h"					// Stellaris Common Type Library
-#include "inc/hw_ints.h"					// Stellaris Hardware Interrupt Library
-#include "inc/hw_memmap.h"					// Stellaris Memory Map Library
-#include "inc/hw_sysctl.h"					// Stellaris System Control Library
-#include "inc/lm3s8962.h"					// Hardware Register Definitions
-#include "driverlib/sysctl.h"				// System Control Driver Prototypes
-#include "driverlib/timer.h"				// Timer Driver Prototypes
-#include "driverlib/interrupt.h"			// Interrupt Driver Prototypes
-#include "driverlib/gpio.h"					// GPIO Driver Prototypes
-#include "driverlib/adc.h"					// ADC Driver Prototypes
-#include "drivers/rit128x96x4.h"			// Screen (OLED) Display Driver
-#include "utils/ustdlib.h"					// Standard Library Prototypes
-#include "frame_graphics.h"					// Easy Display Functions
-#include "buttons.h"						// Easy Button Functions
-#include <math.h>							// Standard C Math Library
+/* Included Libraries */
+#include "inc/hw_types.h"							// Stellaris Common Type Library
+#include "inc/hw_ints.h"							// Stellaris Hardware Interrupt Library
+#include "inc/hw_memmap.h"							// Stellaris Memory Map Library
+#include "inc/hw_sysctl.h"							// Stellaris System Control Library
+#include "inc/lm3s8962.h"							// Hardware Register Definitions
+#include "driverlib/sysctl.h"						// System Control Driver Prototypes
+#include "driverlib/timer.h"						// Timer Driver Prototypes
+#include "driverlib/interrupt.h"					// Interrupt Driver Prototypes
+#include "driverlib/gpio.h"							// GPIO Driver Prototypes
+#include "driverlib/adc.h"							// ADC Driver Prototypes
+#include "drivers/rit128x96x4.h"					// Screen (OLED) Display Driver
+#include "utils/ustdlib.h"							// Standard Library Prototypes
+#include "frame_graphics.h"							// Easy Display Functions
+#include "buttons.h"								// Easy Button Functions
+#include <math.h>									// Standard C Math Library
 
 /* Function Prototypes */
-void initializeClock();						// Initializes System Clock (50 MHz)
-void initializeDisplay();					// Initializes Screen SPI (3.5 MHz)
-void initializeTimers();					// Initializes Button Clock (200 Hz)
-void initializeButtons();					// Sets the Registers for Buttons
-void initializeADC();						// ADC Setup Code for Signal Sampling
-void initializeScreen();					// Draw Function Outside of Main Loop
-void initializeBlinky();					// Sets the Registers for Blinky LED
-void processButtons();
-void screenClean();
-void screenDraw();
-void drawGrid();
-void drawOverlay();
-void drawSignal();
-void drawTrigger();
-void blink();
+void initializeClock();								// Initializes System Clock (50 MHz)
+void initializeDisplay();							// Initializes Screen SPI (3.5 MHz)
+void initializeTimers();							// Initializes Button Clock (200 Hz)
+void initializeButtons();							// Sets the Registers for Buttons
+void initializeADC();								// ADC Setup Code for Signal Sampling
+void initializeScreen();							// Draw Function Outside of Main Loop
+void processButtons();								// Read and Process the B.Press from Queue
+void screenClean();									// Cleans the Screen Before next Draw
+void screenDraw();									// Pushes the Screen Buffer to Display
+void drawGrid();									// Draws the Grid for Oscillo-noscope
+void drawOverlay();									// Draws the Overlay Elements (eg. Text)
+void drawSignal(short* _InputBuffer);				// Draws the Signal to the Screen
+void drawTrigger();									// Draws the Trigger Line (y = 0 for this lab)
+int triggerSearch(int direction, int triggerValue);	// Returns the next Index for Trigger
 
-unsigned long cpu_load_count(void);
-void debugString(int _DebugValue);
-int strCenter(int _Coordinate, char* _String);
-int strWidth(char* _String);
+unsigned long cpu_load_count(void);					// Estimates the CPU Load based on Missed IRQs
+int strCenter(int _Coordinate, char* _String);		// Returns x-Value for Centered String
+int strWidth(char* _String);						// Returns the Calculated Width of the String
 
 /* Definitions */
-#define TIMER0A_CLOCK		2				// Hearbeat (Blinky) (Hz)
-#define TIMER1A_CLOCK		100				// Sample Scan Rate (Hz)
-#define TIMER2A_CLOCK		100				// Button Scan Rate (Hz)
-#define PI	   3.14159265358979				// PI Constant
-#define DISPLAY_WIDTH		128				// Display Horizontal Res.
-#define DISPLAY_HEIGHT		96				// Display Vertical Res.
-#define BUTTON_BUFFER_SIZE	100				// Size of Button Buffer
-#define ADC_BUFFER_SIZE 	2048 			// must be a power of 2
+#define TIMER0A_CLOCK		2						// Hearbeat (Blinky) (Hz)
+#define TIMER1A_CLOCK		100						// Sample Scan Rate (Hz)
+#define TIMER2A_CLOCK		100						// Button Scan Rate (Hz)
+#define PI	   3.14159265358979						// PI Constant
+#define DISPLAY_WIDTH		128						// Display Horizontal Res.
+#define DISPLAY_HEIGHT		96						// Display Vertical Res.
+#define BUTTON_BUFFER_SIZE	100						// Size of Button Buffer
+#define ADC_BUFFER_SIZE 	2048 					// Size of ADC Buffer (Should be 2^n ??)
 #define ADC_BUFFER_WRAP(i) ((i) & (ADC_BUFFER_SIZE - 1)) // index wrapping macro
 
-#define COLOR_GRID			4				// Grid Color (Backlight)
-#define COLOR_SIGNAL		15				// Signal Color (Backlight)
-#define COLOR_TEXT			15				// Text Color (Backlight)
-#define COLOR_TRIGGER		10				// Trigger Color (Backlight)
+#define COLOR_GRID			4						// Grid Color (Backlight)
+#define COLOR_SIGNAL		15						// Signal Color (Backlight)
+#define COLOR_TEXT			15						// Text Color (Backlight)
+#define COLOR_TRIGGER		10						// Trigger Color (Backlight)
 
 /* Global Variables */
-const char* const voltageScales[] = {"100mV", "200mV", "500mV", "1V"};
-int voltageNScales[] = {100, 200, 500, 1000};
-//const char* const timeScales[] = {"10us", "20us", "50us", "100us", "200us"};
-//int timeNScales[] = {10, 20, 50, 100, 200};
+
 const char* const timeScales[] = {"10us", "20us", "30us", "40us", "50us", "60us", "70us", "80us", "90us", "100us"};
 int timeNScales[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-char buttonArray [BUTTON_BUFFER_SIZE];
-unsigned long systemClock;
-int buttonArrayCap = 0;
-int adcZeroValue = 100;
-int triggerIndex = 75;
+const char* const voltageScales[] = {"100mV", "200mV", "500mV", "1V"};
+int voltageNScales[] = {100, 200, 500, 1000};
 
-unsigned long count_unloaded = 0;
-unsigned long count_loaded = 0;
-float cpu_load = 0.0;
+int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
+char buttonArray [BUTTON_BUFFER_SIZE];				// Queue for Button Input
+unsigned long systemClock;							// System Running Clock
+int buttonArrayCap = 0;								// Cap Value for Button Array
+int adcZeroValue = 500;								// ADC Zero Value (Measured)
+int triggerIndex = 1024;							// The Starting Index of the Trigger
+
+unsigned long count_unloaded = 0;					// Value for CPU Measurement (IRQs Disabled)
+unsigned long count_loaded = 0;						// Value for CPU Measurement (IRQs Enabled)
+float cpu_load = 0.0;								// The Calculated (Estimated) CPU Load Value
 
 /* ADC Variables */
-volatile int g_iADCBufferIndex = ADC_BUFFER_SIZE - 1; // latest sample index
-volatile short g_psADCBuffer[ADC_BUFFER_SIZE]; // circular buffer
-volatile unsigned long g_ulADCErrors = 0; // number of missed ADC deadlines
+volatile int g_iADCBufferIndex = ADC_BUFFER_SIZE - 1;	// Index of the Last ADC Sample
+volatile short g_psADCBuffer[ADC_BUFFER_SIZE]; 			// Circular Buffer for ADC Samples
+volatile unsigned long g_ulADCErrors = 0; 				// Missed ADC Deadline Count
 
-short array [200] =
-{
-	0,0,0,0,0,1,1,1,1,1,
-	10,20,30,40,50,60,70,80,90,100,
-	110,120,130,140,150,160,170,180,190,200,
-	200,190,180,170,160,150,140,130,120,110,
-	100,90,80,70,60,50,40,30,20,10,
-	0,0,0,0,0,1,1,1,1,1,
-	10,20,30,40,50,60,70,80,90,100,
-	110,120,130,140,150,160,170,180,190,200,
-	200,190,180,170,160,150,140,130,120,110,
-	100,90,80,70,60,50,40,30,20,10,
-	0,0,0,0,0,1,1,1,1,1,
-	10,20,30,40,50,60,70,80,90,100,
-	110,120,130,140,150,160,170,180,190,200,
-	200,190,180,170,160,150,140,130,120,110,
-	100,90,80,70,60,50,40,30,20,10,
-	0,0,0,0,0,1,1,1,1,1,
-	10,20,30,40,50,60,70,80,90,100,
-	110,120,130,140,150,160,170,180,190,200,
-	200,190,180,170,160,150,140,130,120,110,
-	100,90,80,70,60,50,40,30,20,10
-};
-
-int blinkyOn = 1;
-int triggerUp = 1;
-int buttonIndex = 0;
-int selectionIndex = 0;
-int voltageIndex = 0;
-int timeIndex = 0;
-int CPULoad = 0;
+int blinkyOn = 1;									// Heartbeat (Blinky) Start Value (Not Used 4 Now!)
+int triggerUp = 1;									// Starting Direction of the Trigger (1 - UP, 0 - DOWN)
+int selectionIndex = 0;								// Starting Position of the Scale Selection (0 - Time, 1 - Voltage)
+int voltageIndex = 0;								// Starting Index of the Voltage Scale (100mV)
+int timeIndex = 0;									// Starting Index of the Time Scale (10us)
+int CPULoad = 0;									// Starting CPU Load Value
 
 // Display Global Definitions:
-int barsHorizontal = 13;
-int barsVertical = 11;
-//int scaleHorizontal = 10;
-//int scaleVertical = 10;
-int gridXMin = 0;
-int gridXMax = DISPLAY_WIDTH - 1;
-int gridYMin = 0;
-int gridYMax = DISPLAY_HEIGHT - 1;
+int barsHorizontal = 13;							// Number of Horizontal Lines on Screen Grid
+int barsVertical = 11;								// Number of Vertical Lines on Screen Grid
+int gridXMin = 0;									// The Starting X Position of Screen Grid
+int gridXMax = DISPLAY_WIDTH - 1;					// The Ending X Position of Screen Grid
+int gridYMin = 0;									// The Starting Y Position of Screen Grid
+int gridYMax = DISPLAY_HEIGHT - 1;					// The Ending Y Position of the Screen Grid
 
 // Display Global Variables:
-int gridXSize = 0;
-int gridYSize = 0;
-int gridWidth = 0;
-int gridHeight = 0;
-int alignX = 0;
-int alignY = 0;
+int gridXSize = 0;									// Total Width of the Screen Grid
+int gridYSize = 0;									// Total Height of the Screen Grid
+int gridWidth = 0;									// Width of a Cell in Screen Grid
+int gridHeight = 0;									// Height of a Cell in Screen Grid
+int alignX = 0;										// X Value for Centering the Grid on Screen
+int alignY = 0;										// Y Value for Centering the Grid on Screen
 
 
 /* Main Function */
 int main(void)
 {
-	initializeClock();
-	initializeDisplay();
-	initializeTimers();
-	initializeButtons();
-	initializeADC();
-	//initializeBlinky();
+	initializeClock();								// Initialize the System Clock
+	initializeDisplay();							// Initialize the Screen/Display
+	initializeTimers();								// Initialize IRQs for Timers
+	initializeButtons();							// Initialize Buttons
+	initializeADC();								// Initialize IRQ for ADC
 
 	initializeScreen();
 
@@ -147,17 +118,14 @@ int main(void)
 	{
 		screenClean();
 
-		// Test FIFO
 		processButtons();
 
 		drawGrid();
 		drawOverlay();
-		drawSignal();
+		drawSignal(g_psADCBuffer);
 		drawTrigger();
 
 		screenDraw();
-
-		//blink();
 	}
 }
 
@@ -182,12 +150,12 @@ void drawGrid()
 
 void drawOverlay()
 {
-	char voltageString[20];
-	char timeString[20];
-	char cpuString[20];
+	char voltageString[20];							// Current Voltage Scale Selection (String)
+	char timeString[20];							// Current Time Scale Selection (String)
+	char cpuString[20];								// Current CPU Load (String)
 
-	int marginVertical = 3;
-	int marginHorizontal = 5;
+	int marginVertical = 3;							// Text Alignment (Vertical Margin)
+	int marginHorizontal = 5;						// Text Alignment (Horizontal Margin)
 
 	// Draw Time Scale:
 	usprintf(timeString, "%s", timeScales[timeIndex]);
@@ -203,16 +171,17 @@ void drawOverlay()
 	if(selectionIndex == 1)
 		DrawLine(strCenter(DISPLAY_WIDTH / 2, voltageString), marginVertical + 8, strCenter(DISPLAY_WIDTH / 2, voltageString) + strWidth(voltageString), marginVertical + 8, COLOR_TEXT);
 
-	count_loaded = cpu_load_count();
-	cpu_load = 1.0 - (float)count_loaded/count_unloaded;
+	count_loaded = cpu_load_count();						// CPU Reading Undex Max Load (IRQs Enabled)
+	cpu_load = 1.0 - (float)count_loaded/count_unloaded;	// CPU Load Calculation
 
-	unsigned int whole = (int) (cpu_load * 100);
-	unsigned int frac = (int) (cpu_load * 1000 - whole * 10);
+	unsigned int wholePart = (int)(cpu_load * 100);
+	unsigned int fractionPart = (int)(cpu_load * 1000 - wholePart * 10);
 
 	// Draw CPU Load:
-	usprintf(cpuString, "CPU Load = %02u.%01u%%", whole, frac);
+	usprintf(cpuString, "CPU Load = %02u.%01u%%", wholePart, fractionPart);
 	DrawString(marginHorizontal, DISPLAY_HEIGHT - 7 - marginVertical, cpuString, COLOR_TEXT, false);
 
+	// Values for Trigger Selection Image:
 	int triggerX = ((5 * DISPLAY_WIDTH) / 6) - 8;
 	int triggerY = 3;
 
@@ -231,13 +200,6 @@ void drawOverlay()
 	}
 }
 
-void debugString(int _DebugValue)
-{
-	char debugString [20];
-	usprintf(debugString, "Debug = %d", _DebugValue);
-	DrawString(4, 70, debugString, COLOR_TEXT, false);
-}
-
 int strWidth(char* _String)
 {
 	int offset = 0;
@@ -248,11 +210,12 @@ int strWidth(char* _String)
 		++count;
 		++offset;
 	}
-	return count * 6;
+	return count * 6;								// Each Character has 6 Pixel Width
 }
 
 int strCenter(int _Coordinate, char* _String)
 {
+	// Attempts to center given String at target Coordinate:
 	int result = _Coordinate - (strWidth(_String) / 2);
 
 	if(result > 0 && result < DISPLAY_WIDTH)
@@ -265,63 +228,88 @@ int strCenter(int _Coordinate, char* _String)
 
 void drawTrigger()
 {
-	int y = (gridYMax - gridYMin) / 2;
+	int y = (gridYMax - gridYMin) / 2;				// Trigger Line Always at the Center
 	DrawLine(gridXMin, y, gridXMax, y, COLOR_TRIGGER);
 }
 
-void drawSignal()
+// Direction 0 for slope down, 1 for slope up
+/*int triggerSearch(int direction, int triggerValue) {
+	triggerIndex = g_iADCBufferIndex - (FRAME_SIZE_Y/2); // Initialize to half a screen behind
+
+	int i;
+	for(i=0;i< ADC_BUFFER_SIZE/2;i++) { // All my life I have been searching for something
+		int pastSample = g_psADCBuffer[triggerIndex -1];
+		int currentSample = g_psADCBuffer[triggerIndex];
+		if (direction) { // Slope up
+			if ((pastSample < triggerValue) && (currentSample >= triggerValue)) {
+				return triggerIndex;
+			}
+			else triggerIndex = ADC_BUFFER_WRAP(--triggerIndex); // Wrap it back
+		} else { // Slope down
+			if ((pastSample > triggerValue) && (currentSample <= triggerValue)) {
+				return triggerIndex;
+			} else triggerIndex = ADC_BUFFER_WRAP(--triggerIndex); // Wrap it back
+		}
+	}
+
+	// If for loop isn't terminated, meaning it failed to find a sample
+	//g_ulTriggerSearchFail++; // Increment fail counter
+	return ADC_BUFFER_WRAP(g_iADCBufferIndex - (ADC_BUFFER_SIZE/2));
+}*/
+
+void drawSignal(short* _InputBuffer)
 {
 	int i = 0;
 	int j = 0;
+	//int inputBufferSize = sizeof(_InputBuffer) / sizeof(_InputBuffer[0]);
 	int pixelRange = gridXMax - gridXMin;
 	float pixelWidth = timeNScales[timeIndex] / gridWidth;
-	int pixelBuffer [DISPLAY_WIDTH - 1];
 
-	i = pixelRange / 2;
-	j = 0;
-	while(i < pixelRange)
+	//triggerIndex = triggerSearch(triggerUp, adcZeroValue);
+
+	IntMasterDisable();							// IRQs Disabled so PixelBuffer is filled accurately.
+
+	// This giant if is out Trigger Implementation:
+	if(_InputBuffer[triggerIndex] < adcZeroValue + 25 &&
+			_InputBuffer[triggerIndex] > adcZeroValue - 25 &&
+			((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
+					(!triggerUp && _InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5])))
 	{
-		if(triggerIndex + (int)((j * pixelWidth) / 2) < 200)
-			pixelBuffer[i] = array[triggerIndex + (int)((j * pixelWidth) / 2)];
-		else
-			pixelBuffer[i] = 0;
-		i++;
-		j++;
+		i = pixelRange / 2;
+		j = 0;
+		while(i < pixelRange)					// This while fills the right side of the buffer.
+		{
+			if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
+				pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
+			else
+				pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+			i++;
+			j++;
+		}
+
+
+		i = pixelRange / 2;
+		j = 0;
+		while(i > 0)							// This while fills the left side of the buffer.
+		{
+			if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
+				pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
+			else
+				pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+			i--;
+			j++;
+		}
 	}
 
-
-	i = pixelRange / 2;
-	j = 0;
-	while(i > 0)
-	{
-		if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
-			pixelBuffer[i] = array[triggerIndex - (int)((j * pixelWidth) / 2)];
-		else
-			pixelBuffer[i] = 0;
-		i--;
-		j++;
-	}
+	IntMasterEnable();							// Values are correctly set. Interrupts can be enabled when drawing (next while)..
 
 	i = 0;
-	while(i < pixelRange)
+	while(i < pixelRange)						// This while draws the pixelBuffer (Signal) on Display (Buffer).
 	{
 		int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
 		DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
 		i++;
 	}
-
-	/*IntMasterDisable();
-	while(i < pixelRange && i < g_iADCBufferIndex)
-	{
-		//DrawPoint(gridXMin + i, g_psADCBuffer[i], COLOR_SIGNAL);
-		//int buffer_index = ADC_BUFFER_WRAP(g_iADCBufferIndex + 1);
-		int val = (int) g_psADCBuffer[i]; // read sample from the ADC sequence0 FIFO
-		int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
-		DrawPoint(gridXMin + i, offsetY - (array[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
-		i++;
-	}
-	//debugString(i);
-	IntMasterEnable();*/
 }
 
 void initializeClock()
@@ -329,12 +317,12 @@ void initializeClock()
 	if (REVISION_IS_A2)
 		SysCtlLDOSet(SYSCTL_LDO_2_75V);
 	SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_8MHZ);
-	systemClock = SysCtlClockGet(); // Somehow a 50 MHz System Clock is generated.
+	systemClock = SysCtlClockGet();				// Somehow a 50 MHz System Clock is generated.
 }
 
 void initializeDisplay()
 {
-	RIT128x96x4Init(3500000); // Initialize SPI Interface for Display (3.5 MHz)
+	RIT128x96x4Init(3500000);					// Initialize SPI Interface for Display (3.5 MHz)
 }
 
 void initializeTimers()
@@ -392,22 +380,16 @@ void initializeButtons()
 	GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_1, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
 
 	// initialize interrupt controller to respond to timer interrupts
-	IntPrioritySet(INT_TIMER0A, 64);	// Heartbeat (Low Priority)
-	IntPrioritySet(INT_TIMER1A, 32);	// Signal Sample (Mid Priority)
-	IntPrioritySet(INT_TIMER2A, 0);		// Button Read (High Priority)
+	IntPrioritySet(INT_TIMER0A, 64);			// Heartbeat (Low Priority)
+	IntPrioritySet(INT_TIMER1A, 32);			// Signal Sample (Mid Priority)
+	IntPrioritySet(INT_TIMER2A, 0);				// Button Read (High Priority)
 
 	IntEnable(INT_TIMER0A);
 	IntEnable(INT_TIMER1A);
 	IntEnable(INT_TIMER2A);
 
-	count_unloaded = cpu_load_count();
+	count_unloaded = cpu_load_count();			// Sample CPU Load when not loaded (IRQs still disabled!)
 	IntMasterEnable();
-}
-
-void initializeBlinky()
-{
-	GPIO_PORTF_DIR_R = 0x01;
-	GPIO_PORTF_DEN_R = 0x01;
 }
 
 void screenClean()
@@ -420,6 +402,7 @@ void screenDraw()
 	RIT128x96x4ImageDraw(g_pucFrame, 0, 0, FRAME_SIZE_X, FRAME_SIZE_Y);
 }
 
+// Initialize ADC Code, Followed the given example:
 void initializeADC()
 {
 	SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0); // enable the ADC
@@ -449,7 +432,7 @@ void Timer0AISR()
 {
 	TIMER0_ICR_R = TIMER_ICR_TATOCINT;
 
-	if(blinkyOn)
+	if(blinkyOn)								// Blinky (Hearbeat) is not used for now...
 	{
 		blinkyOn = 0;
 	}
@@ -462,6 +445,9 @@ void Timer0AISR()
 void Timer1AISR()
 {
 	TIMER1_ICR_R = TIMER_ICR_TATOCINT;
+	//IntMasterDisable();
+	//count_unloaded = cpu_load_count();
+	//IntMasterEnable();
 	//CPULoad++;
 	if(CPULoad > 99)
 		CPULoad = 0;
@@ -530,18 +516,6 @@ void ADC_ISR(void)
 	g_iADCBufferIndex = buffer_index;
 }
 
-void blink()
-{
-	if(blinkyOn)
-	{
-		//GPIO_PORTF_DATA_R |= 0x01;
-	}
-	else
-	{
-		//GPIO_PORTF_DATA_R &= ~(0x01);
-	}
-}
-
 void processButtons()
 {
 	if(buttonArrayCap > 0)
@@ -596,6 +570,7 @@ void processButtons()
 	}
 }
 
+// CPU Load Measure, Comes from Class Code:
 unsigned long cpu_load_count(void)
 {
 	unsigned long i = 0;
@@ -605,49 +580,3 @@ unsigned long cpu_load_count(void)
 		i++;
 	return i;
 }
-
-
-/*
-
-// FIFO - DataType from Class Example: (Integrate..)
-
-
-#define FIFO_SIZE 11		// FIFO capacity is 1 item fewer
-typedef char DataType;		// FIFO data type
-
-volatile DataType fifo[FIFO_SIZE];	// FIFO storage array
-volatile int fifo_head = 0;	// index of the first item in the FIFO
-volatile int fifo_tail = 0;	// index one step past the last item
-
-int fifo_put(DataType data)
-{
-	int new_tail = fifo_tail + 1;
-	if (new_tail >= FIFO_SIZE) new_tail = 0; // wrap around
-	if (fifo_head != new_tail) {	// if the FIFO is not full
-		fifo[fifo_tail] = data;		// store data into the FIFO
-		fifo_tail = new_tail;		// advance FIFO tail index
-		return 1;					// success
-	}
-	return 0;	// full
-}
-
-int fifo_get(DataType *data)
-{
-	if (fifo_head != fifo_tail) {	// if the FIFO is not empty
-		*data = fifo[fifo_head];	// read data from the FIFO
-//		IntMasterDisable();
-//		delay_us(1000);
-		fifo_head++;				// advance FIFO head index
-//		IntMasterEnable();
-		if (fifo_head >= FIFO_SIZE) fifo_head = 0; // wrap around
-//		IntMasterEnable();
-		return 1;					// success
-	}
-	return 0;	// empty
-}
-
-//		if (fifo_head == FIFO_SIZE - 1)
-//			fifo_head = 0;
-//		else
-//			fifo_head++;
- */
