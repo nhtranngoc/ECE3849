@@ -67,7 +67,7 @@ int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
 char buttonArray [BUTTON_BUFFER_SIZE];				// Queue for Button Input
 unsigned long systemClock;							// System Running Clock
 int buttonArrayCap = 0;								// Cap Value for Button Array
-int adcZeroValue = 500;								// ADC Zero Value (Measured)
+int adcZeroValue = 525;								// ADC Zero Value (Measured)
 int triggerIndex = 1024;							// The Starting Index of the Trigger
 
 unsigned long count_unloaded = 0;					// Value for CPU Measurement (IRQs Disabled)
