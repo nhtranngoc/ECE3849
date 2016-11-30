@@ -112,7 +112,8 @@ int strWidth(char* _String);						// Returns the Calculated Width of the String
 Void main()
 {
 	IntMasterDisable();
-	initializeClock();								// Initialize the System Clock
+//	RIT128x96x4Init(3500000); // This is the problem. The problem for this project. This project's problem. That problem.
+//	initializeClock();								// Initialize the System Clock
 	initializeButtons();							// Initialize Buttons
 	initializeADC();								// Initialize IRQ for ADC
 	initializeScreen();
@@ -184,7 +185,6 @@ void Button_Task() {
 		Semaphore_pend(sem_button, BIOS_WAIT_FOREVER);
 
 		unsigned long presses = g_ulButtons;
-		TIMER2_ICR_R = TIMER_ICR_TATOCINT;
 		ButtonDebounce((~GPIO_PORTE_DATA_R & (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3)) << 1);
 		ButtonDebounce((~GPIO_PORTF_DATA_R & GPIO_PIN_1) >> 1);
 		presses = ~presses & g_ulButtons; // A List of Button Presses
@@ -204,7 +204,7 @@ void Button_Task() {
 		}
 
 		if (presses != 0) {
-			Mailbox_post(MailboxButton_Handle, &buttonPress, BIOS_NO_WAIT);
+			Mailbox_post(Mailbox_ButtonQueue, &buttonPress, BIOS_NO_WAIT);
 		}
 
 	}
@@ -215,7 +215,7 @@ void UserInput_Task(UArg arg0 , UArg arg1)
 	char currentEntry;
 	while(1)
 	{
-		Mailbox_pend(MailboxButton_Handle, &currentEntry, BIOS_WAIT_FOREVER);
+		Mailbox_pend(Mailbox_ButtonQueue, &currentEntry, BIOS_WAIT_FOREVER);
 
 		if(currentEntry == 'S' || currentEntry == 's')
 		{
@@ -261,26 +261,24 @@ void UserInput_Task(UArg arg0 , UArg arg1)
 			}
 		}
 
-		Semaphore_post(sem_display);
+//		Semaphore_post(sem_display);
 
 	}
 }
 
 void Display_Task(UArg arg0, UArg arg1)
 {
-	RIT128x96x4Init(3500000);
-
 	while(1)
 	{
 		// Wait for signal
-		Semaphore_pend(sem_display, BIOS_WAIT_FOREVER);
-
-		screenClean();
-		drawGrid();
-		drawOverlay();
-		drawTrigger();
-
-		screenDraw();
+//		Semaphore_pend(sem_display, BIOS_WAIT_FOREVER);
+//
+//		screenClean();
+//		drawGrid();
+//		drawOverlay();
+//		drawTrigger();
+//
+//		screenDraw();
 
 //		Semaphore_post(sem_waveform);
 	}
@@ -288,14 +286,69 @@ void Display_Task(UArg arg0, UArg arg1)
 
 void Waveform_Task(UArg arg0, UArg arg1)
 {
-	while(1)
-	{
-		Semaphore_pend(sem_waveform, BIOS_WAIT_FOREVER);
-		// Search for trigger
-		// Copy waveform
-		// Request screen update
-		// block again
-	}
+//	while(1)
+//	{
+//		Semaphore_pend(sem_waveform, BIOS_WAIT_FOREVER);
+//		// Search for trigger
+//		// Copy waveform
+//		// Request screen update
+//		// block again
+//
+//		volatile short* _InputBuffer = g_psADCBuffer;
+//		int i = 0;
+//		int j = 0;
+//		int pixelRange = gridXMax - gridXMin;
+//		float pixelWidth = timeNScales[timeIndex] / gridWidth;
+//
+//		//triggerIndex = triggerSearch(triggerUp, adcZeroValue);
+//
+//		IntMasterDisable();							// IRQs Disabled so PixelBuffer is filled accurately.
+//
+//		// Trigger search implementation
+//		if (_InputBuffer[triggerIndex] < adcZeroValue + 25 &&
+//			_InputBuffer[triggerIndex] > adcZeroValue - 25 &&
+//				((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
+//				 (!triggerUp && (_InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5]))))
+//		{
+//			// This while loop fills the right side of the buffer.
+//			i = pixelRange / 2;
+//			j = 0;
+//			while(i < pixelRange)
+//			{
+//				if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
+//					pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
+//				else
+//					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+//				i++;
+//				j++;
+//			}
+//
+//			// This while loop fills the left side of the buffer.
+//			i = pixelRange / 2;
+//			j = 0;
+//			while(i > 0)
+//			{
+//				if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
+//					pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
+//				else
+//					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+//				i--;
+//				j++;
+//			}
+//		}
+//
+//		IntMasterEnable();							// Values are correctly set. Interrupts can be enabled when drawing (next while)..
+//
+//		i = 0;
+//		while(i < pixelRange)						// This while loop draws the pixelBuffer (Signal) on Display (Buffer).
+//		{
+//			int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
+//			DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
+//			i++;
+//		}
+//
+//		Semaphore_post(sem_display);
+//	}
 }
 
 void ADC_ISR()
