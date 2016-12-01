@@ -48,30 +48,8 @@ const char* const timeScales[] = {"10us", "20us", "30us", "40us", "50us", "60us"
 int timeNScales[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 const char* const voltageScales[] = {"100mV", "200mV", "500mV", "1V"};
 int voltageNScales[] = {100, 200, 500, 1000};
-/*short dummySignal [400] =
-{
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
-	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190
-};
-*/
+
+int fftBuffer [DISPLAY_WIDTH] = {0};				// This one has to be ScreenWidth (128) !!
 int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
 char buttonArray [BUTTON_BUFFER_SIZE];				// Array for Button Input
 unsigned long systemClock;							// System Running Clock
@@ -121,6 +99,7 @@ void screenClean();									// Cleans the Screen Before next Draw
 void screenDraw();									// Pushes the Screen Buffer to Display
 void drawGrid();									// Draws the Grid for Oscillo-noscope
 void drawOverlay();									// Draws the Overlay Elements (eg. Text)
+void drawFFTOverlay();
 void drawSignal(short* _InputBuffer);				// Draws the Signal to the Screen
 void drawTrigger();									// Draws the Trigger Line (y = 0 for this lab)
 //int triggerSearch(int direction, int triggerValue);	// Returns the next Index for Trigger
@@ -321,17 +300,15 @@ void Display_Task(UArg arg0, UArg arg1)
 		}
 		else
 		{
-			drawGrid();
-			drawOverlay();
-			drawTrigger();
+			drawFFTOverlay();
 		}
 
 		screenDraw();
 
 		if(displaySignal)
 			Semaphore_post(sem_waveform);
-//		else
-//			Semaphore_post(sem_fft);
+		else
+			Semaphore_post(sem_fft);
 	}
 }
 
@@ -345,10 +322,7 @@ void Waveform_Task(UArg arg0, UArg arg1)
 //		// Request screen update
 //		// block again
 
-		debugThis();
-//
 		volatile short* _InputBuffer = g_psADCBuffer;
-//		volatile short* _InputBuffer = dummySignal;
 		int i = 0;
 		int j = 0;
 		int pixelRange = gridXMax - gridXMin;
@@ -411,28 +385,39 @@ void Button_Clock(UArg arg) {
 //
 		if(displaySignal)
 			Semaphore_post(sem_waveform);
-//		else
-//			Semaphore_post(sem_fft);
+		else
+			Semaphore_post(sem_fft);
 }
 
 void FFT_Task(UArg arg0, UArg arg1)
 {
-//	while(1)
-//	{
-//		// Wait for signal
-//		Semaphore_pend(sem_fft, BIOS_WAIT_FOREVER);
-//
-//
-//
-//		screenClean();
-//		drawGrid();
-//		//drawOverlay();
-//		//drawTrigger();
-//
-//		screenDraw();
-//
-//		Semaphore_post(sem_display);
-//	}
+	while(1)
+	{
+		// Wait for signal
+		Semaphore_pend(sem_fft, BIOS_WAIT_FOREVER);
+
+		// DO KISS_FFT STUFF HERE
+
+		// Update the fftBuffer:
+		int i = 0;
+//		while(i < 128)
+//		{
+//			fftBuffer[i] = // VALUE FROM FFT BUCKET
+//			i++;
+//		}
+
+		debugThis();
+
+		i = 0;
+		while(i < 128)
+		{
+			int offsetY = 20;
+			DrawPoint(i, offsetY + fftBuffer[i], COLOR_SIGNAL);
+			i++;
+		}
+
+		Semaphore_post(sem_display);
+	}
 }
 
 void ADC_ISR(void)
@@ -497,15 +482,15 @@ void drawOverlay()
 	if(selectionIndex == 1)
 		DrawLine(strCenter(DISPLAY_WIDTH / 2, voltageString), marginVertical + 8, strCenter(DISPLAY_WIDTH / 2, voltageString) + strWidth(voltageString), marginVertical + 8, COLOR_TEXT);
 
-	if(selectionIndex == 2)
-		DrawLine(100, marginVertical + 8, 115, marginVertical + 8, COLOR_TEXT);
-
 	// Values for Trigger Selection Image:
 	int triggerX = ((5 * DISPLAY_WIDTH) / 6) - 8;
 	int triggerY = 3;
 
-	usprintf(debugString, "%s", debugValue);
-	DrawString(marginHorizontal + 15, DISPLAY_HEIGHT - marginVertical - 10, debugString, COLOR_TEXT, false);
+//	usprintf(debugString, "%s", debugValue);
+//	DrawString(marginHorizontal + 15, DISPLAY_HEIGHT - marginVertical - 10, debugString, COLOR_TEXT, false);
+
+	if(selectionIndex == 2)
+		DrawLine(triggerX, triggerY + 8,  triggerX + 16, triggerY + 8, COLOR_TEXT);
 
 	// Draw Trigger Selection:
 	if(triggerUp)
@@ -520,6 +505,23 @@ void drawOverlay()
 		DrawLine(triggerX + 8, triggerY + 6, triggerX + 8, triggerY, COLOR_TRIGGER);
 		DrawLine(triggerX + 8, triggerY + 6, triggerX + 16, triggerY + 6, COLOR_TRIGGER);
 	}
+}
+
+void drawFFTOverlay()
+{
+	char frequencyString[20];							// Current Voltage Scale Selection (String)
+	char intervalString[20];							// Current Time Scale Selection (String)
+
+	int marginVertical = 3;							// Text Alignment (Vertical Margin)
+	int marginHorizontal = 5;						// Text Alignment (Horizontal Margin)
+
+	// Draw Time Scale:
+	usprintf(frequencyString, "%s", "9.8kHz");
+	DrawString(strCenter(DISPLAY_WIDTH / 6, frequencyString), marginVertical, frequencyString, COLOR_TEXT, false);
+
+	// Draw Voltage Scale:
+	usprintf(intervalString, "%s", "20 dBV");
+	DrawString(strCenter(DISPLAY_WIDTH / 2, intervalString), marginVertical, intervalString, COLOR_TEXT, false);
 }
 
 void drawTrigger()
