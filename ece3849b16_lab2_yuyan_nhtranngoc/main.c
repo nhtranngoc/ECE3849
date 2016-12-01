@@ -25,8 +25,8 @@
 #include <xdc/cfg/global.h>
 
 #include <ti/sysbios/BIOS.h>
-#include <ti/sysbios/hal/Hwi.h>
-#include <ti/sysbios/knl/Task.h>
+//#include <ti/sysbios/hal/Hwi.h>
+//#include <ti/sysbios/knl/Task.h>
 
 #define PI	   				3.14159265358979		// PI Constant
 #define DISPLAY_WIDTH		128						// Display Horizontal Res.
@@ -48,7 +48,30 @@ const char* const timeScales[] = {"10us", "20us", "30us", "40us", "50us", "60us"
 int timeNScales[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 const char* const voltageScales[] = {"100mV", "200mV", "500mV", "1V"};
 int voltageNScales[] = {100, 200, 500, 1000};
-
+/*short dummySignal [400] =
+{
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+	200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190
+};
+*/
 int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
 char buttonArray [BUTTON_BUFFER_SIZE];				// Array for Button Input
 unsigned long systemClock;							// System Running Clock
@@ -103,6 +126,10 @@ void drawTrigger();									// Draws the Trigger Line (y = 0 for this lab)
 //int triggerSearch(int direction, int triggerValue);	// Returns the next Index for Trigger
 int strCenter(int _Coordinate, char* _String);		// Returns x-Value for Centered String
 int strWidth(char* _String);						// Returns the Calculated Width of the String
+void debugThis();
+void ADC_ISR(void);
+
+int displaySignal = 1;
 
 /* ======================================================
  * ----------------------- MAIN ------------------------
@@ -112,12 +139,12 @@ int strWidth(char* _String);						// Returns the Calculated Width of the String
 Void main()
 {
 	IntMasterDisable();
-//	RIT128x96x4Init(3500000); // This is the problem. The problem for this project. This project's problem. That problem.
 //	initializeClock();								// Initialize the System Clock
 	initializeButtons();							// Initialize Buttons
 	initializeADC();								// Initialize IRQ for ADC
 	initializeScreen();
-	IntMasterEnable();
+	RIT128x96x4Init(3500000); // This is the problem. The problem for this project. This project's problem. That problem.
+
 	BIOS_start();
 }
 
@@ -176,11 +203,8 @@ void initializeButtons()
  * ======================================================
  */
 
-void Button_Clock(UArg arg) {
-		Semaphore_post(sem_button);
-}
-
 void Button_Task() {
+	IntMasterEnable();
 	while(1) {
 		Semaphore_pend(sem_button, BIOS_WAIT_FOREVER);
 
@@ -219,14 +243,14 @@ void UserInput_Task(UArg arg0 , UArg arg1)
 
 		if(currentEntry == 'S' || currentEntry == 's')
 		{
-			if(triggerUp)
-				triggerUp = 0;
+			if(displaySignal)
+				displaySignal = 0;
 			else
-				triggerUp = 1;
+				displaySignal = 1;
 		}
 		if(currentEntry == 'R' || currentEntry == 'r')
 		{
-			if(selectionIndex < 1)
+			if(selectionIndex < 2)
 				selectionIndex++;
 		}
 		if(currentEntry == 'L' || currentEntry == 'l')
@@ -241,10 +265,17 @@ void UserInput_Task(UArg arg0 , UArg arg1)
 				if(timeIndex > 0)
 					timeIndex--;
 			}
-			else
+			else if(selectionIndex == 1)
 			{
 				if(voltageIndex > 0)
 					voltageIndex--;
+			}
+			else
+			{
+				if(triggerUp)
+					triggerUp = 0;
+				else
+					triggerUp = 1;
 			}
 		}
 		if(currentEntry == 'U' || currentEntry == 'u')
@@ -254,14 +285,21 @@ void UserInput_Task(UArg arg0 , UArg arg1)
 				if(timeIndex < 9)
 					timeIndex++;
 			}
-			else
+			else if(selectionIndex == 1)
 			{
 				if(voltageIndex < 3)
 					voltageIndex++;
 			}
+			else
+			{
+				if(triggerUp)
+					triggerUp = 0;
+				else
+					triggerUp = 1;
+			}
 		}
 
-//		Semaphore_post(sem_display);
+		Semaphore_post(sem_display);
 
 	}
 }
@@ -271,87 +309,133 @@ void Display_Task(UArg arg0, UArg arg1)
 	while(1)
 	{
 		// Wait for signal
-//		Semaphore_pend(sem_display, BIOS_WAIT_FOREVER);
-//
-//		screenClean();
-//		drawGrid();
-//		drawOverlay();
-//		drawTrigger();
-//
-//		screenDraw();
+		Semaphore_pend(sem_display, BIOS_WAIT_FOREVER);
 
-//		Semaphore_post(sem_waveform);
+		screenClean();
+
+		if(displaySignal)
+		{
+			drawGrid();
+			drawOverlay();
+			drawTrigger();
+		}
+		else
+		{
+			drawGrid();
+			drawOverlay();
+			drawTrigger();
+		}
+
+		screenDraw();
+
+		if(displaySignal)
+			Semaphore_post(sem_waveform);
+//		else
+//			Semaphore_post(sem_fft);
 	}
 }
 
 void Waveform_Task(UArg arg0, UArg arg1)
 {
-//	while(1)
-//	{
-//		Semaphore_pend(sem_waveform, BIOS_WAIT_FOREVER);
+	while(1)
+	{
+		Semaphore_pend(sem_waveform, BIOS_WAIT_FOREVER);
 //		// Search for trigger
 //		// Copy waveform
 //		// Request screen update
 //		// block again
+
+		debugThis();
 //
-//		volatile short* _InputBuffer = g_psADCBuffer;
-//		int i = 0;
-//		int j = 0;
-//		int pixelRange = gridXMax - gridXMin;
-//		float pixelWidth = timeNScales[timeIndex] / gridWidth;
+		volatile short* _InputBuffer = g_psADCBuffer;
+//		volatile short* _InputBuffer = dummySignal;
+		int i = 0;
+		int j = 0;
+		int pixelRange = gridXMax - gridXMin;
+		float pixelWidth = timeNScales[timeIndex] / gridWidth;
+
+		//triggerIndex = triggerSearch(triggerUp, adcZeroValue);
+
+		IntMasterDisable();							// IRQs Disabled so PixelBuffer is filled accurately.
+
+		// Trigger search implementation
+		if (_InputBuffer[triggerIndex] < adcZeroValue + 5 &&
+			_InputBuffer[triggerIndex] > adcZeroValue - 5 &&
+				((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
+				 (!triggerUp && (_InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5]))))
+		{
+			// This while loop fills the right side of the buffer.
+			i = pixelRange / 2;
+			j = 0;
+			while(i < pixelRange)
+			{
+				if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
+					pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
+				else
+					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+				i++;
+				j++;
+			}
+
+			// This while loop fills the left side of the buffer.
+			i = pixelRange / 2;
+			j = 0;
+			while(i > 0)
+			{
+				if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
+					pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
+				else
+					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+				i--;
+				j++;
+			}
+		}
+
+		IntMasterEnable();							// Values are correctly set. Interrupts can be enabled when drawing (next while)..
+
+		i = 0;
+		while(i < pixelRange)						// This while loop draws the pixelBuffer (Signal) on Display (Buffer).
+		{
+			int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
+			DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
+			i++;
+		}
+
+		Semaphore_post(sem_display);
+	}
+}
+
+void Button_Clock(UArg arg) {
+		Semaphore_post(sem_button);
+//		Semaphore_post(sem_display);
 //
-//		//triggerIndex = triggerSearch(triggerUp, adcZeroValue);
+		if(displaySignal)
+			Semaphore_post(sem_waveform);
+//		else
+//			Semaphore_post(sem_fft);
+}
+
+void FFT_Task(UArg arg0, UArg arg1)
+{
+//	while(1)
+//	{
+//		// Wait for signal
+//		Semaphore_pend(sem_fft, BIOS_WAIT_FOREVER);
 //
-//		IntMasterDisable();							// IRQs Disabled so PixelBuffer is filled accurately.
 //
-//		// Trigger search implementation
-//		if (_InputBuffer[triggerIndex] < adcZeroValue + 25 &&
-//			_InputBuffer[triggerIndex] > adcZeroValue - 25 &&
-//				((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
-//				 (!triggerUp && (_InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5]))))
-//		{
-//			// This while loop fills the right side of the buffer.
-//			i = pixelRange / 2;
-//			j = 0;
-//			while(i < pixelRange)
-//			{
-//				if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
-//					pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
-//				else
-//					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
-//				i++;
-//				j++;
-//			}
 //
-//			// This while loop fills the left side of the buffer.
-//			i = pixelRange / 2;
-//			j = 0;
-//			while(i > 0)
-//			{
-//				if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
-//					pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
-//				else
-//					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
-//				i--;
-//				j++;
-//			}
-//		}
+//		screenClean();
+//		drawGrid();
+//		//drawOverlay();
+//		//drawTrigger();
 //
-//		IntMasterEnable();							// Values are correctly set. Interrupts can be enabled when drawing (next while)..
-//
-//		i = 0;
-//		while(i < pixelRange)						// This while loop draws the pixelBuffer (Signal) on Display (Buffer).
-//		{
-//			int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
-//			DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
-//			i++;
-//		}
+//		screenDraw();
 //
 //		Semaphore_post(sem_display);
 //	}
 }
 
-void ADC_ISR()
+void ADC_ISR(void)
 {
 	ADC0_ISC_R = ADC_ISC_IN0; // clear ADC sequence0 interrupt flag in the ADCISC register
 
@@ -413,14 +497,12 @@ void drawOverlay()
 	if(selectionIndex == 1)
 		DrawLine(strCenter(DISPLAY_WIDTH / 2, voltageString), marginVertical + 8, strCenter(DISPLAY_WIDTH / 2, voltageString) + strWidth(voltageString), marginVertical + 8, COLOR_TEXT);
 
+	if(selectionIndex == 2)
+		DrawLine(100, marginVertical + 8, 115, marginVertical + 8, COLOR_TEXT);
+
 	// Values for Trigger Selection Image:
 	int triggerX = ((5 * DISPLAY_WIDTH) / 6) - 8;
 	int triggerY = 3;
-
-	if(debugValue < 100)
-		debugValue++;
-	else
-		debugValue = 0;
 
 	usprintf(debugString, "%s", debugValue);
 	DrawString(marginHorizontal + 15, DISPLAY_HEIGHT - marginVertical - 10, debugString, COLOR_TEXT, false);
@@ -479,4 +561,12 @@ int strWidth(char* _String)
 		++offset;
 	}
 	return count * 6; // Each character a width of 6 pixels in ASCII
+}
+
+void debugThis()
+{
+	if(debugValue < 100)
+		debugValue++;
+	else
+		debugValue = 0;
 }
