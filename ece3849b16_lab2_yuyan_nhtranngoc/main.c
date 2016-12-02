@@ -18,6 +18,8 @@
 #include "frame_graphics.h"							// Easy Display Functions
 #include "buttons.h"								// Easy Button Functions
 #include <math.h>									// Standard C Math Library
+#include "kiss_fft.h"
+#include "_kiss_fft_guts.h"
 
 #include <xdc/std.h>
 #include <xdc/runtime/Error.h>
@@ -29,6 +31,8 @@
 //#include <ti/sysbios/knl/Task.h>
 
 #define PI	   				3.14159265358979		// PI Constant
+#define NFFT 1024 //FFT length
+#define KISS_FFT_CFG_SIZE (sizeof(struct kiss_fft_state)+sizeof(kiss_fft_cpx)*(NFFT-1))
 #define DISPLAY_WIDTH		128						// Display Horizontal Res.
 #define DISPLAY_HEIGHT		96						// Display Vertical Res.
 #define BUTTON_BUFFER_SIZE	100						// Size of Button Buffer
@@ -48,7 +52,7 @@ const char* const timeScales[] = {"10us", "20us", "30us", "40us", "50us", "60us"
 int timeNScales[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 const char* const voltageScales[] = {"100mV", "200mV", "500mV", "1V"};
 int voltageNScales[] = {100, 200, 500, 1000};
-
+volatile short* _InputBuffer;
 int fftBuffer [DISPLAY_WIDTH] = {0};				// This one has to be ScreenWidth (128) !!
 int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
 char buttonArray [BUTTON_BUFFER_SIZE];				// Array for Button Input
@@ -59,6 +63,7 @@ int triggerIndex = 1024;							// The Starting Index of the Trigger
 
 volatile int g_iADCBufferIndex = ADC_BUFFER_SIZE - 1;	// Index of the Last ADC Sample
 volatile short g_psADCBuffer[ADC_BUFFER_SIZE]; 			// Circular Buffer for ADC Samples
+volatile short g_tempBuffer[NFFT];
 volatile unsigned long g_ulADCErrors = 0; 				// Missed ADC Deadline Count
 
 int blinkyOn = 1;									// Heartbeat (Blinky) Start Value (Not Used 4 Now!)
@@ -118,7 +123,6 @@ int displaySignal = 1;
 Void main()
 {
 	IntMasterDisable();
-//	initializeClock();								// Initialize the System Clock
 	initializeButtons();							// Initialize Buttons
 	initializeADC();								// Initialize IRQ for ADC
 	initializeScreen();
@@ -131,15 +135,6 @@ Void main()
  * ------------------------ INIT ------------------------
  * ======================================================
  */
-
-void initializeClock()
-{
-	if (REVISION_IS_A2) {
-		SysCtlLDOSet(SYSCTL_LDO_2_75V);
-	}
-	SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_8MHZ);
-//	systemClock = SysCtlClockGet();				// Somehow a 50 MHz System Clock is generated.
-}
 
 void initializeScreen()
 {
@@ -301,14 +296,17 @@ void Display_Task(UArg arg0, UArg arg1)
 		else
 		{
 			drawFFTOverlay();
+
+			int i = 0;
+			while(i < 128) {
+				DrawPoint(i, -60 + fftBuffer[i], COLOR_SIGNAL);
+				i++;
+			}
 		}
 
 		screenDraw();
 
-		if(displaySignal)
-			Semaphore_post(sem_waveform);
-		else
-			Semaphore_post(sem_fft);
+		Semaphore_post(sem_waveform);
 	}
 }
 
@@ -322,60 +320,76 @@ void Waveform_Task(UArg arg0, UArg arg1)
 //		// Request screen update
 //		// block again
 
-		volatile short* _InputBuffer = g_psADCBuffer;
 		int i = 0;
 		int j = 0;
 		int pixelRange = gridXMax - gridXMin;
 		float pixelWidth = timeNScales[timeIndex] / gridWidth;
 
-		//triggerIndex = triggerSearch(triggerUp, adcZeroValue);
-
 		IntMasterDisable();							// IRQs Disabled so PixelBuffer is filled accurately.
-
-		// Trigger search implementation
-		if (_InputBuffer[triggerIndex] < adcZeroValue + 5 &&
-			_InputBuffer[triggerIndex] > adcZeroValue - 5 &&
-				((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
-				 (!triggerUp && (_InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5]))))
-		{
-			// This while loop fills the right side of the buffer.
-			i = pixelRange / 2;
-			j = 0;
-			while(i < pixelRange)
+		switch(displaySignal){
+		case 1:
+			_InputBuffer = g_psADCBuffer;
+			// Trigger search implementation
+			if (_InputBuffer[triggerIndex] < adcZeroValue + 5 &&
+					_InputBuffer[triggerIndex] > adcZeroValue - 5 &&
+					((triggerUp && (_InputBuffer[triggerIndex - 5] < _InputBuffer[triggerIndex + 5])) ||
+							(!triggerUp && (_InputBuffer[triggerIndex - 5] > _InputBuffer[triggerIndex + 5]))))
 			{
-				if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
-					pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
-				else
-					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
-				i++;
+				// This while loop fills the right side of the buffer.
+				i = pixelRange / 2;
+				j = 0;
+				while(i < pixelRange)
+				{
+					if(triggerIndex + (int)((j * pixelWidth) / 2) < 2048)
+						pixelBuffer[i] = _InputBuffer[triggerIndex + (int)((j * pixelWidth) / 2)];
+					else
+						pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+					i++;
+					j++;
+				}
+
+				// This while loop fills the left side of the buffer.
+				i = pixelRange / 2;
+				j = 0;
+				while(i > 0)
+				{
+					if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
+						pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
+					else
+						pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
+					i--;
+					j++;
+				}
+			}
+			break;
+
+		case 0: //Spectrum mode
+			i = 0;
+			j = 0;
+			for (i= g_iADCBufferIndex - 1024; i != g_iADCBufferIndex; i++){
+				g_tempBuffer[j] = g_psADCBuffer[ADC_BUFFER_WRAP(i)];
 				j++;
 			}
+			break;
 
-			// This while loop fills the left side of the buffer.
-			i = pixelRange / 2;
-			j = 0;
-			while(i > 0)
-			{
-				if(triggerIndex - (int)((j * pixelWidth) / 2) > 0)
-					pixelBuffer[i] = _InputBuffer[triggerIndex - (int)((j * pixelWidth) / 2)];
-				else
-					pixelBuffer[i] = 0;				// Fill empty if trigger is too close to the end of sample buffer.
-				i--;
-				j++;
-			}
 		}
 
 		IntMasterEnable();							// Values are correctly set. Interrupts can be enabled when drawing (next while)..
 
-		i = 0;
-		while(i < pixelRange)						// This while loop draws the pixelBuffer (Signal) on Display (Buffer).
-		{
-			int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
-			DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
-			i++;
+		if(displaySignal){
+			i = 0;
+			while(i < pixelRange)						// This while loop draws the pixelBuffer (Signal) on Display (Buffer).
+			{
+				int offsetY = gridYMin + (gridYMin + gridYMax) / 2;
+				DrawPoint(gridXMin + i, offsetY - (pixelBuffer[i] - adcZeroValue) / (voltageNScales[voltageIndex] / 100), COLOR_SIGNAL);
+				i++;
+			}
+
+			Semaphore_post(sem_display);
+		} else {
+			Semaphore_post(sem_fft);
 		}
 
-		Semaphore_post(sem_display);
 	}
 }
 
@@ -391,28 +405,33 @@ void Button_Clock(UArg arg) {
 
 void FFT_Task(UArg arg0, UArg arg1)
 {
+	static char kiss_fft_cfg_buffer[KISS_FFT_CFG_SIZE];
+	size_t buffer_size = KISS_FFT_CFG_SIZE;
+	kiss_fft_cfg cfg;
+	static kiss_fft_cpx in[NFFT], out[NFFT];
+	int i;
+
+	cfg = kiss_fft_alloc(NFFT, 0, kiss_fft_cfg_buffer, &buffer_size);
+
 	while(1)
 	{
+		debugThis();
 		// Wait for signal
 		Semaphore_pend(sem_fft, BIOS_WAIT_FOREVER);
-
 		// DO KISS_FFT STUFF HERE
 
+		for (i = 0; i < NFFT; i++) {
+			in[i].r = g_tempBuffer[i];
+			in[i].i = 0;
+		}
+
+		kiss_fft(cfg, in, out);
+
 		// Update the fftBuffer:
-		int i = 0;
-//		while(i < 128)
-//		{
-//			fftBuffer[i] = // VALUE FROM FFT BUCKET
-//			i++;
-//		}
-
-		debugThis();
-
 		i = 0;
 		while(i < 128)
 		{
-			int offsetY = 20;
-			DrawPoint(i, offsetY + fftBuffer[i], COLOR_SIGNAL);
+			fftBuffer[i] = (log10(out[i].r*out[i].r + out[i].i*out[i].i)*(-10))+180;// VALUE FROM FFT BUCKET
 			i++;
 		}
 
@@ -522,6 +541,9 @@ void drawFFTOverlay()
 	// Draw Voltage Scale:
 	usprintf(intervalString, "%s", "20 dBV");
 	DrawString(strCenter(DISPLAY_WIDTH / 2, intervalString), marginVertical, intervalString, COLOR_TEXT, false);
+
+
+
 }
 
 void drawTrigger()
