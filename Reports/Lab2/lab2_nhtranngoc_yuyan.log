@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.14159265-2.6-0.99993 (TeX Live 2016/dev) (preloaded format=xelatex 2016.9.9)  5 DEC 2016 16:46
+This is XeTeX, Version 3.14159265-2.6-0.99993 (TeX Live 2016/dev) (preloaded format=xelatex 2016.9.9)  5 DEC 2016 16:49
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -609,24 +609,19 @@ LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
 ]
 File: assets/overview.jpg Graphic file (type QTm)
 
-<use  "assets/overview.jpg" >
-File: assets/circuit.jpg Graphic file (type QTm)
- <use  "assets/circuit.jpg" >
+<use  "assets/overview.jpg" > [2
 
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-[2
-
-] [3] (./assets/main.c) [4] (./assets/main.c) (./assets/main.c [5])
-(./assets/main.c [6]) (./assets/main.c) (./assets/main.c [7]) (./assets/main.c)
-(./assets/main.c [8]) [9] (./lab2_nhtranngoc_yuyan.aux) ) 
+] (./assets/main.c) [3] (./assets/main.c)
+[4] (./assets/main.c) (./assets/main.c [5]) (./assets/main.c [6])
+(./assets/main.c) (./assets/main.c [7]) (./assets/main.c) (./assets/main.c
+[8]) [9] (./lab2_nhtranngoc_yuyan.aux) ) 
 Here is how much of TeX's memory you used:
- 16586 strings out of 495632
- 330678 string characters out of 6187766
- 395135 words of memory out of 5000000
- 19690 multiletter control sequences out of 15000+600000
+ 16628 strings out of 495632
+ 331577 string characters out of 6187766
+ 406135 words of memory out of 5000000
+ 19731 multiletter control sequences out of 15000+600000
  8582 words of font info for 52 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 36i,7n,61p,10372b,1446s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 36i,6n,61p,10372b,1446s stack positions out of 5000i,500n,10000p,200000b,80000s
 
 Output written on lab2_nhtranngoc_yuyan.pdf (9 pages).

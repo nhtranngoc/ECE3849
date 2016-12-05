@@ -55,11 +55,11 @@ Our previous assignment was to build a real-time digital oscilloscope that is ca
 
 \section{Discussion and Results}
 In this part we will discuss the methodologies used during the projects, along with their results.
-\begin{figure}[h]
-  \includegraphics[width=\linewidth]{assets/circuit.jpg}
-  \caption{The Colpitts oscillator}
-  \label{fig:circuit}
-\end{figure}
+% \begin{figure}[h]
+%   \includegraphics[width=\linewidth]{assets/circuit.jpg}
+%   \caption{The Colpitts oscillator}
+%   \label{fig:circuit}
+% \end{figure}
 
 \subsection{Creating a new SYS/BIOS project}
 
@@ -73,6 +73,8 @@ Our previous code relied heavily on timers and interrupts to achive real time fu
 \lstinputlisting[firstline=123, lastline=132]{assets/main.c}
 
 The timer initialization function is taken out. The button initialization function hasn’t changed at all and the ADC code changed slightly (interrups are taken out) as below.
+
+\lstinputlisting[firstline=149, lastline=161]{assets/main.c}
 
 \subsection{Creating the ADC Hwi}
 Next we created an Hwi Object for the ADC, instead of declaring/initializing ISR like Lab 1. We created the Cortex-M3 specific Hwi module, make the priority 0 and the interrupt number as 30 - the interrupt number corresponds to ADC0 on the LM3S8962 board. Then we refer to the \texttt{ADC\_ISR} function by reference.
