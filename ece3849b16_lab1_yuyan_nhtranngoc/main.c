@@ -79,7 +79,7 @@ int voltageNScales[] = {100, 200, 500, 1000};
 int pixelBuffer [DISPLAY_WIDTH - 1];				// Value Array for Signal Display
 char buttonArray [BUTTON_BUFFER_SIZE];				// Array for Button Input
 unsigned long systemClock;							// System Running Clock
-int buttonArrayCap = 0;								// Cap Value for Button Array
+int buttonArrayIndex = 0;								// Cap Value for Button Array
 int adcZeroValue = 525;								// ADC Zero Value (Measured)
 int triggerIndex = 1024;							// The Starting Index of the Trigger
 
@@ -154,11 +154,11 @@ int main(void)
  */
 void processButtons()
 {
-	if(buttonArrayCap > 0)
+	if(buttonArrayIndex > 0)
 	{
 
-		char currentEntry = buttonArray[buttonArrayCap - 1];
-		buttonArrayCap--;
+		char currentEntry = buttonArray[buttonArrayIndex - 1];
+		buttonArrayIndex--;
 
 		if(currentEntry == 'S' || currentEntry == 's')
 		{
@@ -578,42 +578,42 @@ void Timer2AISR()
 
 	if(presses & 1)			// Select Button
 	{
-		if(buttonArrayCap < BUTTON_BUFFER_SIZE)
+		if(buttonArrayIndex < BUTTON_BUFFER_SIZE)
 		{
-			buttonArray[buttonArrayCap] = 'S';
-			buttonArrayCap++;
+			buttonArray[buttonArrayIndex] = 'S';
+			buttonArrayIndex++;
 		}
 	}
 	else if(presses & 16)	// Right Button
 	{
-		if(buttonArrayCap < BUTTON_BUFFER_SIZE)
+		if(buttonArrayIndex < BUTTON_BUFFER_SIZE)
 		{
-			buttonArray[buttonArrayCap] = 'R';
-			buttonArrayCap++;
+			buttonArray[buttonArrayIndex] = 'R';
+			buttonArrayIndex++;
 		}
 	}
 	else if(presses & 8)	// Left Button
 	{
-		if(buttonArrayCap < BUTTON_BUFFER_SIZE)
+		if(buttonArrayIndex < BUTTON_BUFFER_SIZE)
 		{
-			buttonArray[buttonArrayCap] = 'L';
-			buttonArrayCap++;
+			buttonArray[buttonArrayIndex] = 'L';
+			buttonArrayIndex++;
 		}
 	}
 	else if(presses & 4)	// Down Button
 	{
-		if(buttonArrayCap < BUTTON_BUFFER_SIZE)
+		if(buttonArrayIndex < BUTTON_BUFFER_SIZE)
 		{
-			buttonArray[buttonArrayCap] = 'D';
-			buttonArrayCap++;
+			buttonArray[buttonArrayIndex] = 'D';
+			buttonArrayIndex++;
 		}
 	}
 	else if(presses & 2)	// Up Button
 	{
-		if(buttonArrayCap < BUTTON_BUFFER_SIZE)
+		if(buttonArrayIndex < BUTTON_BUFFER_SIZE)
 		{
-			buttonArray[buttonArrayCap] = 'U';
-			buttonArrayCap++;
+			buttonArray[buttonArrayIndex] = 'U';
+			buttonArrayIndex++;
 		}
 	}
 }
