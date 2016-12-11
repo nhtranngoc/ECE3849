@@ -6,6 +6,7 @@
 	<deviceEndianness value="little"/>
 	<codegenToolVersion value="5.0.4"/>
 	<isElfFormat value="true"/>
+	<connection value="common/targetdb/connections/Stellaris_ICDI_Connection.xml"/>
 	<linkerCommandFile value="lm3s2110.cmd"/>
 	<rts value="libc.a"/>
 	<templateProperties value="id=com.ti.rtsc.SYSBIOS.example_52,type=rtsc,products=com.ti.rtsc.SYSBIOS,platform=ti.platforms.stellaris:$DeviceId$,buildProfile=release,isHybrid=true,configuroOptions=--compileOptions &quot;-g --optimize_with_debug&quot;,"/>

@@ -11,9 +11,11 @@
 #include "inc/hw_sysctl.h"
 #include "driverlib/sysctl.h"
 #include "driverlib/timer.h"
-#include "utils/ustdlib.h"
 #include "driverlib/interrupt.h"
 #include "driverlib/gpio.h"
+#include "drivers/rit128x96x4.h"
+#include "utils/ustdlib.h"
+
 #include "driverlib/comp.h"
 #include <xdc/runtime/System.h>
 
