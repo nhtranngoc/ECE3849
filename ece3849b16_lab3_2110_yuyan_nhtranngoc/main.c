@@ -87,8 +87,9 @@ void Timer0A_Hwi() {
 	} else {
 		g_timerCount = TimerValueGet(TIMER0_BASE, TIMER_A);
 		g_period += ((g_timerCount - prev) & 0xffff);
-		g_intervalCount++;
 		prev = g_timerCount;
+
+		g_intervalCount++;
 	}
 }
 
